@@ -131,8 +131,8 @@ func getDB() *dbx {
 				path = "./data/gemini.db"
 			}
 			sqliteDir = filepath.Dir(path)
-			if err := os.MkdirAll(sqliteDir, 0o755); err != nil {
-				fmt.Fprintf(os.Stderr, "[db] 建目录 %s 失败: %v\n%s", sqliteDir, err, dbPermHint(sqliteDir))
+			if err := prepareSQLiteFile(path); err != nil {
+				fmt.Fprintf(os.Stderr, "[db] 准备本机储存失败: %v\n%s", err, dbPermHint(sqliteDir))
 				os.Exit(1)
 			}
 			connStr = fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)", path)

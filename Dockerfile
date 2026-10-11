@@ -48,4 +48,4 @@ EXPOSE 8083
 
 ENV DB_PATH=/data/gemini.db
 ENTRYPOINT ["/app/gemini-web2api"]
-CMD ["--db", "/data/gemini.db", "--port", "8083"]
+CMD ["--db", "/data/gemini.db", "--host", "0.0.0.0", "--port", "8083"]

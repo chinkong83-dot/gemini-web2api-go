@@ -3,11 +3,7 @@ package app
 import (
 	"encoding/base64"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
-
-	fhttp "github.com/bogdanfinn/fhttp"
 )
 
 // 读图 / 读视频：把客户端传来的图片或视频上传成附件，再在对话里引用。
@@ -37,8 +33,7 @@ type pendingUpload struct {
 // collectImages 从 OpenAI 格式的 messages 里把图片抠出来。
 //
 // 认两种写法：content 数组里的 image_url（OpenAI Chat）和 input_image（Responses）。
-// 图片来源支持 data URL 和 http(s) 链接，后者会下载下来再传 —— 直接把链接给上游
-// 是不行的，它只认自己存储里的附件。
+// 图片／影片只收 data URL，避免由输入触发本机或内网请求。
 func collectImages(messages []map[string]interface{}, proxyURL string) ([]pendingUpload, error) {
 	var out []pendingUpload
 	for _, m := range messages {
@@ -99,10 +94,7 @@ func materializeImage(src, proxyURL string, idx int) (pendingUpload, error) {
 	if strings.HasPrefix(src, "data:") {
 		return decodeDataURL(src, idx)
 	}
-	if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
-		return fetchImage(src, proxyURL, idx)
-	}
-	return pendingUpload{}, fmt.Errorf("image %d: unsupported source (want a data: URL or http(s) link)", idx)
+	return pendingUpload{}, fmt.Errorf("image %d: only inline data: URLs are supported; remote URLs are disabled", idx)
 }
 
 // decodeDataURL 解析 data:<mime>;base64,<数据>。
@@ -131,61 +123,10 @@ func decodeDataURL(src string, idx int) (pendingUpload, error) {
 	return newMediaUpload(data, mime, idx)
 }
 
-// fetchImage 下载远程图片。走跟正式请求同一个出口：图从别的 IP 拉、对话从这个 IP 发，
-// 除了慢一点没别的好处，还多暴露一个出口。
-func fetchImage(src, proxyURL string, idx int) (pendingUpload, error) {
-	var body []byte
-	var ctype string
-	if proxyURL != "" {
-		req, err := http.NewRequest("GET", src, nil)
-		if err != nil {
-			return pendingUpload{}, err
-		}
-		applyChromeHeaders(req)
-		resp, err := getStdlibClient(proxyURL).Do(req)
-		if err != nil {
-			return pendingUpload{}, fmt.Errorf("image %d: fetch failed: %w", idx, err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != 200 {
-			return pendingUpload{}, fmt.Errorf("image %d: fetch returned HTTP %d", idx, resp.StatusCode)
-		}
-		ctype = resp.Header.Get("Content-Type")
-		body, err = io.ReadAll(io.LimitReader(resp.Body, maxImageBytes+1))
-		if err != nil {
-			return pendingUpload{}, err
-		}
-	} else {
-		req, err := fhttp.NewRequest("GET", src, nil)
-		if err != nil {
-			return pendingUpload{}, err
-		}
-		resp, err := getTLSClient().Do(req)
-		if err != nil {
-			return pendingUpload{}, fmt.Errorf("image %d: fetch failed: %w", idx, err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != 200 {
-			return pendingUpload{}, fmt.Errorf("image %d: fetch returned HTTP %d", idx, resp.StatusCode)
-		}
-		ctype = resp.Header.Get("Content-Type")
-		body, err = io.ReadAll(io.LimitReader(resp.Body, maxImageBytes+1))
-		if err != nil {
-			return pendingUpload{}, err
-		}
-	}
-	if i := strings.Index(ctype, ";"); i > 0 {
-		ctype = ctype[:i]
-	}
-	if !strings.HasPrefix(ctype, "image/") && !strings.HasPrefix(ctype, "video/") {
-		ctype = "image/png"
-	}
-	return newMediaUpload(body, ctype, idx)
-}
-
 // newMediaUpload 按 mime 决定这是图片还是视频：
 //   - video/* → 附件类型位 2（跟抓包一致：文件元组 [路径,2,null,"video/mp4"]），上限 maxVideoBytes；
 //   - 其余当图片 → 类型位 1，上限 maxImageBytes。
+//
 // 类型位 1/2 是服务端认媒体种类的开关，填错模型就按错的类型解析附件。
 func newMediaUpload(data []byte, mime string, idx int) (pendingUpload, error) {
 	if len(data) == 0 {

@@ -24,24 +24,16 @@ func newSessionToken() string {
 	return hex.EncodeToString(b)
 }
 
-// authOK accepts either:
-//  1. Cookie gemini_admin_session matching a valid sessions row
-//  2. Authorization: Bearer <admin_token>
-//  3. ?token=<admin_token> query param (for embedded HTML <a href> use)
+// Admin 認證只收 session Cookie 或 Bearer token，避免 token 留在 URL。
 func authOK(r *http.Request) bool {
 	if cfg.AdminToken == "" {
-		return true // unauthenticated mode (only safe behind 127.0.0.1)
+		return false
 	}
 	if c, err := r.Cookie(sessionCookieName); err == nil && validSession(c.Value) {
 		return true
 	}
 	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 		if subtle.ConstantTimeCompare([]byte(h[7:]), []byte(cfg.AdminToken)) == 1 {
-			return true
-		}
-	}
-	if t := r.URL.Query().Get("token"); t != "" {
-		if subtle.ConstantTimeCompare([]byte(t), []byte(cfg.AdminToken)) == 1 {
 			return true
 		}
 	}
@@ -71,7 +63,7 @@ func handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "bad json"})
 		return
 	}
-	if cfg.AdminToken != "" && subtle.ConstantTimeCompare([]byte(req.Token), []byte(cfg.AdminToken)) != 1 {
+	if cfg.AdminToken == "" || subtle.ConstantTimeCompare([]byte(req.Token), []byte(cfg.AdminToken)) != 1 {
 		writeJSON(w, 401, map[string]string{"error": "invalid token"})
 		return
 	}
@@ -83,6 +75,7 @@ func handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   int(sessionTTL.Seconds()),
 		HttpOnly: true,
+		Secure:   r.TLS != nil,
 		SameSite: http.SameSiteLaxMode,
 	})
 	writeJSON(w, 200, map[string]bool{"ok": true})
@@ -624,11 +617,12 @@ func handleAdminConfig(w http.ResponseWriter, r *http.Request) {
 			"models": modelNamesSorted(),
 			// 部署期配置只读展示，改这些要动 docker-compose.yml 并重启
 			"deploy": map[string]interface{}{
-				"host":        cfg.Host,
-				"port":        cfg.Port,
-				"db_path":     cfg.DBPath,
-				"cookie_file": cfg.CookieFile,
-				"admin_auth":  cfg.AdminToken != "",
+				"host":          cfg.Host,
+				"port":          cfg.Port,
+				"db_path":       cfg.DBPath,
+				"cookie_file":   cfg.CookieFile,
+				"admin_auth":    cfg.AdminToken != "",
+				"require_login": cfg.RequireLogin,
 				// 面板的部署配置表要展示 Key 是否被启动参数锁死
 				"api_key_locked": apiKeyLocked,
 			},

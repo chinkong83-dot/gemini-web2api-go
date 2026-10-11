@@ -1,5 +1,7 @@
 # gemini-web2api-go
 
+> 本 fork 預設供本機 Google 帳號使用：綁定 `127.0.0.1`、管理面板必須設 `ADMIN_TOKEN`、`require_login=true`，沒有可用 Cookie 就拒絕匿名送出對話。媒體下載與每跳重導只允許明確的 Google HTTPS 主機，輸入圖片／影片只收 `data:` URL，資料庫限本機 SQLite。請用本 fork 的原始碼或 `docker compose up -d --build`；下方 upstream binary／image 與匿名使用說明不代表這些修補。登入、啟動與剩餘限制見 [local-security.md](docs/local-security.md)。
+
 **Gemini web → OpenAI-compatible API.** A self-hosted proxy that turns the free [gemini.google.com](https://gemini.google.com) web app into `/v1/chat/completions` — **no Google API key, no paid quota**. Single Go binary, real Chrome TLS fingerprint, cookie pool with automatic renewal, proxy pool, built-in admin dashboard, SQLite / MySQL / PostgreSQL. Image, music, canvas and video generation (`/v1/videos`) included.
 
 <img src="docs/banner.svg" alt="gemini-web2api-go — Gemini web to OpenAI-compatible API proxy" width="100%">

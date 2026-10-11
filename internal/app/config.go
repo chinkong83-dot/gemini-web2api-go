@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"sync"
 )
@@ -21,6 +22,7 @@ type Config struct {
 	DBPath         string `json:"db_path"`
 	AdminToken     string `json:"admin_token"`
 	AdminEnabled   bool   `json:"admin_enabled"`
+	RequireLogin   bool   `json:"require_login"`
 	RetentionDays  int    `json:"retention_days"`
 
 	// Per-IP rate limit (一个 slot = 直连/或一个代理),0 表示不限。
@@ -57,7 +59,7 @@ var (
 func defaultConfig() Config {
 	return Config{
 		Port:           8083,
-		Host:           "0.0.0.0",
+		Host:           "127.0.0.1",
 		RetryAttempts:  3,
 		RetryDelaySec:  2,
 		RequestTimeout: 180,
@@ -70,6 +72,7 @@ func defaultConfig() Config {
 		DBPath:         "./data/gemini.db",
 		AdminToken:     "",
 		AdminEnabled:   true,
+		RequireLogin:   true,
 		RetentionDays:  30,
 		// 单出口实测 80-180 次不等（连接策略和出口质量决定），静态 IP 上 188。
 		// RPH 取下沿 80 保守留量；按低速率跑的部署可以调高很多 ——
@@ -89,6 +92,16 @@ func defaultConfig() Config {
 		AutoDeleteConversation: false,
 		AnonFirst:              false,
 	}
+}
+
+func validateStartupConfig(c Config) error {
+	if c.AdminEnabled && c.AdminToken == "" {
+		return fmt.Errorf("admin requires ADMIN_TOKEN or --admin-token")
+	}
+	if os.Getenv("SQL_DSN") != "" {
+		return fmt.Errorf("this local fork uses SQLite only; unset SQL_DSN")
+	}
+	return nil
 }
 
 func loadConfig(path string) error {

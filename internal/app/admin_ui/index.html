@@ -1015,12 +1015,15 @@ async function loadRtCfg() {
   // 三列（项/值/怎么改）挤在窄栏里读不动，第三列换成 title 悬浮
   const d = data.deploy || {};
   document.querySelector('#deployTable tbody').innerHTML = [
-    ['监听', `${escapeHtml(d.host || '')}:${d.port}`, 'compose 的 ports + --port'],
+    ['监听', `${escapeHtml(d.host || '')}:${d.port}`, 'compose 的 ports + --host / --port'],
     ['数据库', escapeHtml(d.db_path || ''), 'compose 的 volumes + --db'],
     ['Cookie 播种文件', d.cookie_file ? escapeHtml(d.cookie_file) : '<span class="badge muted">未配置</span>',
      '启动时把文件内容导入 Cookie 池；之后从「Cookie 池」页面管理'],
     ['面板鉴权', d.admin_auth ? '<span class="badge ok">已开启</span>'
                              : '<span class="badge fail">未设 token</span>', 'compose 的 ADMIN_TOKEN'],
+    ['Google 登录要求', d.require_login ? '<span class="badge ok">必须登录</span>'
+                                       : '<span class="badge fail">允许匿名</span>',
+     '必须登录时，没有可用账号就拒绝发送；匿名优先和匿名降级开关不会覆盖此要求'],
     ['API Key', d.api_key_locked ? '<span class="badge">部署锁定</span>'
                                  : '<span class="badge ok">面板可轮换</span>', 'compose 的 API_KEY'],
   ].map(r => `<tr><td title="${escapeHtml(r[2])}">${r[0]}</td>
@@ -1402,6 +1405,7 @@ async function runTest() {
       rate_limited: '<span class="badge fail">被限流（429）</span>',
       upstream_error: '<span class="badge fail">上游错误</span>',
       network_error: '<span class="badge fail">网络层错误</span>',
+      login_required: '<span class="badge fail">需要 Google 登录</span>',
     }[r.status] || `<span class="badge muted">${r.status}</span>`;
     box.innerHTML = `
       <div style="display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; font-size: 13px;">

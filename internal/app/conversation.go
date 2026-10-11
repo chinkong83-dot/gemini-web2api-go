@@ -246,6 +246,9 @@ const webUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
 // cid/rid/rcid/tok26 和 turn+1，供下一轮续接。
 func streamGenerateConv(prompt string, mc ModelConfig, conv *convState,
 	onDelta, onReasoning func(string)) (*StreamResult, error) {
+	if cfg.RequireLogin && (!conv.isLogin || conv.cookie == "") {
+		return nil, fmt.Errorf("Google login required: add an enabled account cookie in the admin panel")
+	}
 	p, slotOK, slotErr := acquireSlot(conv.proxyID)
 	if !slotOK {
 		return &StreamResult{}, slotErr

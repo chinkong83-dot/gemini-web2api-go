@@ -315,6 +315,9 @@ func rotatePost(url string, headers map[string]string, body []byte, proxyURL str
 // 连 User-Agent 都不发 —— 同一个账号在上游看来会因为走没走代理而呈现两种客户端。
 func rotateDo(method, url string, headers map[string]string, body []byte, proxyURL string) (
 	int, []string, []byte, error) {
+	if _, err := trustedGoogleURL(url, accountHosts); err != nil {
+		return 0, nil, nil, err
+	}
 	var rdr io.Reader
 	if body != nil {
 		rdr = strings.NewReader(string(body))

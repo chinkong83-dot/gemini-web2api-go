@@ -110,6 +110,9 @@ func sanitizeUploadName(name string) string {
 // uploadPost 走跟主请求相同的出口发 POST，响应头一起带回（start 要取 x-goog-upload-url）。
 func uploadPost(url string, headers map[string]string, body []byte, proxyURL string) (
 	int, map[string]string, []byte, error) {
+	if _, err := trustedGoogleURL(url, uploadHosts); err != nil {
+		return 0, nil, nil, err
+	}
 	if proxyURL != "" {
 		req, err := http.NewRequest("POST", url, bytes.NewReader(body))
 		if err != nil {

@@ -32,12 +32,13 @@ func maskKey(k string) string {
 // Run 是进程入口，由根目录的 main.go 调用。
 func Run() {
 	port := flag.Int("port", 0, "listening port (default: 8083 or config.json)")
+	host := flag.String("host", "", "listening address (default: 127.0.0.1 or config.json)")
 	configPath := flag.String("config", "", "path to config.json")
 	cookieFile := flag.String("cookie-file", "", "path to cookie file")
 	proxy := flag.String("proxy", "", "HTTP proxy fallback when proxy pool is empty")
 	impersonate := flag.String("impersonate", "", "TLS profile (chrome_146, chrome_133, firefox_147, ...)")
 	dbPath := flag.String("db", "", "SQLite path (default: ./data/gemini.db)")
-	adminToken := flag.String("admin-token", "", "admin token (empty = no auth, only safe on 127.0.0.1)")
+	adminToken := flag.String("admin-token", "", "required admin token; also accepts ADMIN_TOKEN")
 	apiKey := flag.String("api-key", "", "API key for /v1/* (locked). Empty = use kv-table key (auto-gen on first boot, mutable from admin UI)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
@@ -53,6 +54,9 @@ func Run() {
 	}
 	if *port > 0 {
 		cfg.Port = *port
+	}
+	if *host != "" {
+		cfg.Host = *host
 	}
 	if *cookieFile != "" {
 		cfg.CookieFile = *cookieFile
@@ -71,6 +75,10 @@ func Run() {
 	}
 	if envTok := os.Getenv("ADMIN_TOKEN"); envTok != "" && cfg.AdminToken == "" {
 		cfg.AdminToken = envTok
+	}
+	if err := validateStartupConfig(cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
+		os.Exit(1)
 	}
 
 	// boot DB and load proxy pool

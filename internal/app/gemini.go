@@ -118,7 +118,7 @@ func modelNeedsLogin(mc ModelConfig) bool {
 // （匿名会被上游回 1100），所以带附件时一律挑号。开关关着永远返回 false（保持旧行为：
 // 池里有号就用号）。
 func anonFirstEligible(mc ModelConfig, hasAttachment bool) bool {
-	return rtCfg().AnonFirst && !hasAttachment && !modelNeedsLogin(mc)
+	return !cfg.RequireLogin && rtCfg().AnonFirst && !hasAttachment && !modelNeedsLogin(mc)
 }
 
 // availableModels 返回当前配置下值得暴露的模型。
@@ -320,6 +320,9 @@ func streamGenerateWithFiles(prompt, latest string, mc ModelConfig, pending []pe
 			acct = a
 		}
 	}
+	if cfg.RequireLogin && acct == nil {
+		return nil, fmt.Errorf("Google login required: add an enabled account cookie in the admin panel")
+	}
 	preferProxy := int64(0)
 	if acct != nil {
 		preferProxy = acct.ProxyID
@@ -415,7 +418,7 @@ func streamGenerateWithFiles(prompt, latest string, mc ModelConfig, pending []pe
 		acct, _ = pickCookieAccountExcept(tried) // 取不到时返回 nil，循环自然结束
 	}
 	if lastCookieErr != nil && cookieStr == "" {
-		if !rtCfg().FallbackAnon {
+		if cfg.RequireLogin || !rtCfg().FallbackAnon {
 			// 默认报错而不是降级：cookie 失效后上游不会拒绝，只是把你当匿名用户，
 			// 纯文本请求照样 200 —— 于是 3.1 Pro 被静默降级成 3.5 Flash-Lite、
 			// 思考链消失，客户端完全看不出来。宁可明确失败也不给假的成功。
@@ -787,6 +790,9 @@ func buildGeminiHeaders(cookieStr, sapisid, hexID string) map[string]string {
 // 实测号活一两小时就失效 —— 所以这些必须收下来并写回账号。
 func doGeminiRequest(endpoint, body string, headers map[string]string, proxyURL string,
 	onLine func(string)) (int, []byte, int64, []string, error) {
+	if _, err := trustedGoogleURL(endpoint, geminiHosts); err != nil {
+		return 0, nil, 0, nil, err
+	}
 	sendAt := time.Now()
 	if proxyURL != "" {
 		// 走 stdlib 的 http.ProxyURL，已知能过 socks5/socks5h。
@@ -1045,6 +1051,12 @@ type ProbeResult struct {
 // 不写 db、不消耗限流 slot。
 func probeGemini(prompt, proxyURL string) ProbeResult {
 	res := ProbeResult{Impersonate: rtCfg().Impersonate}
+	cookieStr, sapisid := loadCookie()
+	if cfg.RequireLogin && cookieStr == "" {
+		res.Status = "login_required"
+		res.Diagnostic = "Google login required: add an enabled account cookie"
+		return res
+	}
 
 	inner := make([]interface{}, innerSlots)
 	inner[0] = []interface{}{prompt, 0, nil, nil, nil, nil, 0}
@@ -1084,8 +1096,11 @@ func probeGemini(prompt, proxyURL string) ProbeResult {
 
 	// probe 是旁路探测，不回写 cookie 健康度：它的失败原因跟 cookie 无关。
 	// 但 at 必须带——否则挂了 cookie 之后连通性探测会一直报 400，假报故障。
-	cookieStr, sapisid := loadCookie()
-	if tok, e := getXSRF(cookieStr, proxyURL); e == nil && tok != "" {
+	if tok, e := getXSRF(cookieStr, proxyURL); e != nil && cfg.RequireLogin {
+		res.Status = "login_required"
+		res.Diagnostic = "Google account cookie is unavailable"
+		return res
+	} else if e == nil && tok != "" {
 		form.Set("at", tok)
 		body = form.Encode()
 	}
