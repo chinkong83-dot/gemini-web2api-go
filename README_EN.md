@@ -1,6 +1,6 @@
 # gemini-web2api-go
 
-> This fork defaults to local Google-account use: bind `127.0.0.1`, require an admin token and an imported login session (`require_login=true`), validate every credential-bearing media/upload destination and redirect, accept inline `data:` input media only, and use local SQLite. Build this fork or use `docker compose up -d --build`; the upstream binaries/images and anonymous-mode instructions below do not include these changes. See [local-security.md](docs/local-security.md) for setup and limits.
+> This fork defaults to Google SSO and Gemini requests through a dedicated Chrome profile, without Cookie import. Chrome is hidden by default; `GEMINI_SHOW_BROWSER=1` keeps it visible, and missing login temporarily opens a window. It binds localhost, requires an admin token, and guards Google HTTPS destinations/redirects. OpenCode can use `/v1/chat/completions`; see [examples/opencode.json](examples/opencode.json). Retained upstream instructions and the minimal Docker image describe legacy HTTP mode. See [local-security.md](docs/local-security.md) for desktop setup and limits.
 
 **Gemini web → OpenAI-compatible API.** A self-hosted proxy that turns the free [gemini.google.com](https://gemini.google.com) web app into `/v1/chat/completions` — **no Google API key, no paid quota**. Single Go binary, real Chrome TLS fingerprint, cookie pool with automatic renewal, proxy pool, built-in admin dashboard, SQLite / MySQL / PostgreSQL. Image, music, canvas and video generation (`/v1/videos`) included.
 

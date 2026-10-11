@@ -51,6 +51,12 @@ func cookieKey(cookie string) string {
 
 // invalidateXSRF 丢掉某个 cookie 的缓存 token，下次取会重新抓页面。
 func invalidateXSRF(cookie string) {
+	if cfg.BrowserEnabled {
+		if b := currentBrowser(); b != nil {
+			_ = b.Refresh()
+		}
+		return
+	}
 	if cookie == "" {
 		return
 	}
@@ -62,6 +68,10 @@ func invalidateXSRF(cookie string) {
 // getXSRF 取该 cookie 对应的 XSRF token；命中缓存且没过期就直接返回。
 // cookie 为空（匿名）时返回空串——匿名请求不需要这个字段。
 func getXSRF(cookie, proxyURL string) (string, error) {
+	if cfg.BrowserEnabled {
+		e, err := fetchAppTokens(browserSessionMarker, "")
+		return e.token, err
+	}
 	if cookie == "" {
 		return "", nil
 	}
@@ -86,6 +96,10 @@ func getXSRF(cookie, proxyURL string) (string, error) {
 
 // getUploadTokens 取上传要用的 Push-ID / X-Client-Pctx，跟 XSRF token 同一份缓存。
 func getUploadTokens(cookie, proxyURL string) (pushID, pctx string, err error) {
+	if cfg.BrowserEnabled {
+		e, err := fetchAppTokens(browserSessionMarker, "")
+		return e.pushID, e.pctx, err
+	}
 	key := cookieKey(cookie)
 
 	xsrfMu.Lock()
@@ -110,6 +124,14 @@ func getUploadTokens(cookie, proxyURL string) (pushID, pctx string, err error) {
 // 免得页面里取到的 token 和后续请求来自两个不同 IP。
 // cookie 传空串就是匿名抓（页面照样返回，只是没有登录态字段）。
 func fetchAppPage(cookie, proxyURL string) ([]byte, error) {
+	if cfg.BrowserEnabled {
+		b := currentBrowser()
+		if b == nil {
+			return nil, fmt.Errorf("Google browser login required")
+		}
+		html, err := b.Snapshot()
+		return []byte(html), err
+	}
 	const pageURL = "https://gemini.google.com/app"
 	headers := map[string]string{
 		"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",

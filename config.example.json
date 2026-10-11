@@ -4,6 +4,7 @@
   "db_path": "./data/gemini.db",
   "admin_enabled": true,
   "require_login": true,
+  "browser_enabled": true,
   "admin_token": "",
   "impersonate": "chrome_146",
   "default_model": "gemini-3.6-flash",

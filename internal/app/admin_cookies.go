@@ -72,6 +72,10 @@ func cookieAcctView(a CookieAccount) map[string]interface{} {
 
 // handleAdminCookies — GET 列出池 / POST 新增一条。
 func handleAdminCookies(w http.ResponseWriter, r *http.Request) {
+	if cfg.BrowserEnabled {
+		writeJSON(w, 409, map[string]string{"error": "Chrome manages login; use the browser login page instead of importing cookies"})
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		accts := accountList()
@@ -112,6 +116,10 @@ func handleAdminCookies(w http.ResponseWriter, r *http.Request) {
 //	POST .../toggle 翻转 enabled/disabled
 //	PATCH           改 label / note / status
 func handleAdminCookieItem(w http.ResponseWriter, r *http.Request) {
+	if cfg.BrowserEnabled {
+		writeJSON(w, 409, map[string]string{"error": "Cookie pool is inactive in browser mode"})
+		return
+	}
 	rest := strings.TrimPrefix(r.URL.Path, "/admin/api/cookies/")
 	parts := strings.Split(rest, "/")
 	if len(parts) < 1 || parts[0] == "" {

@@ -247,7 +247,7 @@ const webUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
 func streamGenerateConv(prompt string, mc ModelConfig, conv *convState,
 	onDelta, onReasoning func(string)) (*StreamResult, error) {
 	if cfg.RequireLogin && (!conv.isLogin || conv.cookie == "") {
-		return nil, fmt.Errorf("Google login required: add an enabled account cookie in the admin panel")
+		return nil, googleLoginRequiredError()
 	}
 	p, slotOK, slotErr := acquireSlot(conv.proxyID)
 	if !slotOK {

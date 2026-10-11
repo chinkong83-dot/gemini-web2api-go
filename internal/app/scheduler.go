@@ -39,7 +39,9 @@ func startScheduler() {
 			case <-retention.C:
 				retentionSweep()
 			case <-proxyReload.C:
-				loadProxies()
+				if !cfg.BrowserEnabled {
+					loadProxies()
+				}
 			case <-rotate.C:
 				rotate.Reset(rotateAllAccounts())
 			}

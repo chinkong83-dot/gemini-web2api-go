@@ -487,6 +487,10 @@ func mediaGetOnce(rawURL string, headers map[string]string, proxyURL string) (in
 	if _, err := trustedGoogleURL(rawURL, mediaHosts); err != nil {
 		return 0, nil, nil, err
 	}
+	if cfg.BrowserEnabled {
+		res, err := browserRequest("GET", rawURL, headers, nil, nil)
+		return res.Status, res.Headers, res.Body, err
+	}
 	if proxyURL != "" {
 		req, err := http.NewRequest("GET", rawURL, nil)
 		if err != nil {

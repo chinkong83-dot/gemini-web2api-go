@@ -355,6 +355,14 @@ func handleAdminRequests(w http.ResponseWriter, r *http.Request) {
 
 // /admin/api/proxies — GET list / POST create / PUT update / DELETE
 func handleAdminProxies(w http.ResponseWriter, r *http.Request) {
+	if cfg.BrowserEnabled {
+		if r.Method == "GET" {
+			writeJSON(w, 200, map[string]any{"items": []any{}, "browser_mode": true})
+		} else {
+			writeJSON(w, 409, map[string]string{"error": "proxy pool is inactive in browser mode"})
+		}
+		return
+	}
 	switch r.Method {
 	case "GET":
 		writeJSON(w, 200, map[string]interface{}{"items": listProxies()})
@@ -382,6 +390,10 @@ func handleAdminProxies(w http.ResponseWriter, r *http.Request) {
 
 // /admin/api/proxies/{id}/{action} — PATCH update / DELETE delete / POST reset / POST toggle
 func handleAdminProxyItem(w http.ResponseWriter, r *http.Request) {
+	if cfg.BrowserEnabled {
+		writeJSON(w, 409, map[string]string{"error": "proxy pool is inactive in browser mode"})
+		return
+	}
 	// /admin/api/proxies/123/(toggle|reset|update|delete)
 	rest := strings.TrimPrefix(r.URL.Path, "/admin/api/proxies/")
 	parts := strings.Split(rest, "/")
@@ -617,12 +629,13 @@ func handleAdminConfig(w http.ResponseWriter, r *http.Request) {
 			"models": modelNamesSorted(),
 			// 部署期配置只读展示，改这些要动 docker-compose.yml 并重启
 			"deploy": map[string]interface{}{
-				"host":          cfg.Host,
-				"port":          cfg.Port,
-				"db_path":       cfg.DBPath,
-				"cookie_file":   cfg.CookieFile,
-				"admin_auth":    cfg.AdminToken != "",
-				"require_login": cfg.RequireLogin,
+				"host":            cfg.Host,
+				"port":            cfg.Port,
+				"db_path":         cfg.DBPath,
+				"cookie_file":     cfg.CookieFile,
+				"admin_auth":      cfg.AdminToken != "",
+				"require_login":   cfg.RequireLogin,
+				"browser_enabled": cfg.BrowserEnabled,
 				// 面板的部署配置表要展示 Key 是否被启动参数锁死
 				"api_key_locked": apiKeyLocked,
 			},

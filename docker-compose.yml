@@ -37,9 +37,10 @@ services:
       # API_KEY: "sk-gemini-your-key"
       TZ: "${TZ:-UTC}"
 
+    # 最小镜像没有桌面 Chrome，使用 --browser=false 的 legacy HTTP 模式。
     # 容器内监听 0.0.0.0，宿主端口仅发布到 127.0.0.1。
     # 只有要加参数时才写 command，写了就会整个覆盖掉默认值，别漏 --db。
-    # command: ["--db", "/data/gemini.db", "--host", "0.0.0.0", "--port", "8083", "--cookie-file", "/app/cookie.txt"]
+    # command: ["--browser=false", "--db", "/data/gemini.db", "--host", "0.0.0.0", "--port", "8083", "--cookie-file", "/app/cookie.txt"]
 
     healthcheck:
       test: ["CMD", "/app/gemini-web2api", "--version"]

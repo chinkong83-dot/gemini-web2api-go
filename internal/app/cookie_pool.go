@@ -409,6 +409,12 @@ func pickCookieAccount() (*CookieAccount, bool) {
 // 轮转会让大约一半请求撞上坏号 —— 表现就是"成功率莫名其妙很低"，而每次失败
 // 看起来都像是上游的问题。
 func pickCookieAccountExcept(skip map[int64]bool) (*CookieAccount, bool) {
+	if cfg.BrowserEnabled {
+		if skip[0] || !browserReady() {
+			return nil, false
+		}
+		return &CookieAccount{Label: "Chrome profile", Cookie: browserSessionMarker, Status: "enabled"}, true
+	}
 	pickMu.Lock()
 	defer pickMu.Unlock()
 	// 健康的排前面，同样健康的按最久未用轮转。
@@ -446,6 +452,9 @@ func pickCookieAccountExcept(skip map[int64]bool) (*CookieAccount, bool) {
 //
 // statusCode 为 0 表示压根没拿到响应（网络层失败）。
 func markCookieByStatus(id int64, statusCode int, errStr string) {
+	if id <= 0 {
+		return
+	}
 	switch {
 	case statusCode == 200:
 		markAccountResult(id, true, "")

@@ -97,6 +97,9 @@ var Models = map[string]ModelConfig{
 
 // hasCookie 表示 cookie 池里有没有可用账号。决定 3.1 Pro 是否出现在模型列表里。
 func hasCookie() bool {
+	if cfg.BrowserEnabled {
+		return browserReady()
+	}
 	_, enabled := accountCount()
 	return enabled > 0
 }
@@ -131,7 +134,7 @@ func anonFirstEligible(mc ModelConfig, hasAttachment bool) bool {
 // 登录也只能拿到 3.6 Flash 扩展」是在缺 XSRF token 的条件下测的，那时候带
 // cookie 的请求根本发不出去（见 xsrf.go）。
 func availableModels() map[string]ModelConfig {
-	if hasCookie() {
+	if cfg.BrowserEnabled || hasCookie() {
 		return Models
 	}
 	out := make(map[string]ModelConfig, len(Models))
@@ -220,6 +223,13 @@ func (e *RateLimitError) Error() string {
 //
 // 调用方拿到 (proxy, ok=true) 必须配 deferred releaseSlot()。
 func acquireSlot(preferProxyID int64) (Proxy, bool, error) {
+	if cfg.BrowserEnabled {
+		if ok, reason := trySlotAcquire(0); ok {
+			return Proxy{}, true, nil
+		} else {
+			return Proxy{}, false, &RateLimitError{Reason: reason, ProxyID: 0}
+		}
+	}
 	// 1. 先试代理池（如果配了）
 	proxyMu.RLock()
 	hasProxies := len(proxyCache) > 0
@@ -321,7 +331,7 @@ func streamGenerateWithFiles(prompt, latest string, mc ModelConfig, pending []pe
 		}
 	}
 	if cfg.RequireLogin && acct == nil {
-		return nil, fmt.Errorf("Google login required: add an enabled account cookie in the admin panel")
+		return nil, googleLoginRequiredError()
 	}
 	preferProxy := int64(0)
 	if acct != nil {
@@ -418,6 +428,9 @@ func streamGenerateWithFiles(prompt, latest string, mc ModelConfig, pending []pe
 		acct, _ = pickCookieAccountExcept(tried) // 取不到时返回 nil，循环自然结束
 	}
 	if lastCookieErr != nil && cookieStr == "" {
+		if cfg.BrowserEnabled {
+			return attrib(fmt.Errorf("Google browser session unavailable: %w", lastCookieErr))
+		}
 		if cfg.RequireLogin || !rtCfg().FallbackAnon {
 			// 默认报错而不是降级：cookie 失效后上游不会拒绝，只是把你当匿名用户，
 			// 纯文本请求照样 200 —— 于是 3.1 Pro 被静默降级成 3.5 Flash-Lite、
@@ -793,6 +806,10 @@ func doGeminiRequest(endpoint, body string, headers map[string]string, proxyURL 
 	if _, err := trustedGoogleURL(endpoint, geminiHosts); err != nil {
 		return 0, nil, 0, nil, err
 	}
+	if cfg.BrowserEnabled {
+		res, err := browserRequest("POST", endpoint, headers, []byte(body), onLine)
+		return res.Status, res.Body, res.TTFB, nil, err
+	}
 	sendAt := time.Now()
 	if proxyURL != "" {
 		// 走 stdlib 的 http.ProxyURL，已知能过 socks5/socks5h。
@@ -1050,6 +1067,25 @@ type ProbeResult struct {
 // probeGemini 直接调 Gemini StreamGenerate（绕过限流），返回详细诊断。
 // 不写 db、不消耗限流 slot。
 func probeGemini(prompt, proxyURL string) ProbeResult {
+	if cfg.BrowserEnabled {
+		res, err := streamGenerate(prompt, prompt, Models["gemini-3.6-flash"], nil, nil)
+		out := ProbeResult{ProxyName: "Chrome profile", Impersonate: "Chrome browser"}
+		if err != nil {
+			out.Status = "upstream_error"
+			if !browserReady() {
+				out.Status = "login_required"
+			}
+			out.Diagnostic = err.Error()
+			return out
+		}
+		out.OK = true
+		out.Status = "success"
+		out.HTTPCode = 200
+		out.ResponseText = truncate(extractResponseText(res.Raw), 200)
+		out.TotalMs = res.TotalMs
+		out.Diagnostic = "Request completed in Chrome."
+		return out
+	}
 	res := ProbeResult{Impersonate: rtCfg().Impersonate}
 	cookieStr, sapisid := loadCookie()
 	if cfg.RequireLogin && cookieStr == "" {

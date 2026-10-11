@@ -23,6 +23,9 @@ type Config struct {
 	AdminToken     string `json:"admin_token"`
 	AdminEnabled   bool   `json:"admin_enabled"`
 	RequireLogin   bool   `json:"require_login"`
+	BrowserEnabled bool   `json:"browser_enabled"`
+	BrowserProfile string `json:"browser_profile"`
+	ChromePath     string `json:"chrome_path"`
 	RetentionDays  int    `json:"retention_days"`
 
 	// Per-IP rate limit (一个 slot = 直连/或一个代理),0 表示不限。
@@ -73,6 +76,8 @@ func defaultConfig() Config {
 		AdminToken:     "",
 		AdminEnabled:   true,
 		RequireLogin:   true,
+		BrowserEnabled: true,
+		BrowserProfile: defaultBrowserProfile(),
 		RetentionDays:  30,
 		// 单出口实测 80-180 次不等（连接策略和出口质量决定），静态 IP 上 188。
 		// RPH 取下沿 80 保守留量；按低速率跑的部署可以调高很多 ——
@@ -100,6 +105,12 @@ func validateStartupConfig(c Config) error {
 	}
 	if os.Getenv("SQL_DSN") != "" {
 		return fmt.Errorf("this local fork uses SQLite only; unset SQL_DSN")
+	}
+	if _, err := showBrowserEnv(); err != nil {
+		return err
+	}
+	if c.BrowserEnabled && (!c.RequireLogin || c.CookieFile != "" || c.Proxy != "") {
+		return fmt.Errorf("browser mode requires login and uses its own profile/direct connection; remove cookie-file and proxy settings")
 	}
 	return nil
 }

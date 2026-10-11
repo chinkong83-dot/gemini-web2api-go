@@ -1,12 +1,16 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -41,6 +45,9 @@ func Run() {
 	adminToken := flag.String("admin-token", "", "required admin token; also accepts ADMIN_TOKEN")
 	apiKey := flag.String("api-key", "", "API key for /v1/* (locked). Empty = use kv-table key (auto-gen on first boot, mutable from admin UI)")
 	showVersion := flag.Bool("version", false, "print version and exit")
+	browserMode := flag.Bool("browser", true, "use Chrome for Google login and requests")
+	browserProfile := flag.String("browser-profile", "", "dedicated Chrome profile directory")
+	chromePath := flag.String("chrome-path", "", "Chrome executable path")
 	flag.Parse()
 
 	if *showVersion {
@@ -57,6 +64,17 @@ func Run() {
 	}
 	if *host != "" {
 		cfg.Host = *host
+	}
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "browser" {
+			cfg.BrowserEnabled = *browserMode
+		}
+	})
+	if *browserProfile != "" {
+		cfg.BrowserProfile = *browserProfile
+	}
+	if *chromePath != "" {
+		cfg.ChromePath = *chromePath
 	}
 	if *cookieFile != "" {
 		cfg.CookieFile = *cookieFile
@@ -84,9 +102,24 @@ func Run() {
 	// boot DB and load proxy pool
 	getDB()
 	initRuntimeConfig() // 面板改过的运行时配置盖在启动配置之上
-	loadProxies()
-	seedProxiesFromConfig() // --proxy / 遗留静态代理并进代理池
-	seedCookiesFromConfig() // --cookie-file / 遗留单 cookie 并进 cookie 池
+	if !cfg.BrowserEnabled {
+		loadProxies()
+		seedProxiesFromConfig()
+		seedCookiesFromConfig()
+	}
+	shutdown, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if cfg.BrowserEnabled {
+		show, _ := showBrowserEnv()
+		b, err := newChromeSession(cfg.BrowserProfile, cfg.ChromePath, show)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "browser config error:", err)
+			return
+		}
+		setBrowser(b)
+		defer b.Close()
+		b.Login()
+	}
 	resolvedAPIKey := initAPIKey(*apiKey)
 	initTokenizer()
 	startScheduler()
@@ -152,6 +185,8 @@ func Run() {
 		mux.HandleFunc("/admin/api/config", requireAuth(handleAdminConfig))
 		mux.HandleFunc("/admin/api/cookies", requireAuth(handleAdminCookies))
 		mux.HandleFunc("/admin/api/cookies/", requireAuth(handleAdminCookieItem))
+		mux.HandleFunc("/admin/api/browser", requireAuth(handleAdminBrowser))
+		mux.HandleFunc("/admin/api/browser/login", requireAuth(handleAdminBrowserLogin))
 		mux.HandleFunc("/admin/api/test", requireAuth(handleAdminTest))
 	}
 
@@ -164,7 +199,9 @@ func Run() {
 	}
 
 	cookieStatus := "none (anonymous)"
-	if total, enabled := accountCount(); enabled > 0 {
+	if cfg.BrowserEnabled {
+		cookieStatus = "managed by Chrome profile (no Cookie import)"
+	} else if total, enabled := accountCount(); enabled > 0 {
 		cookieStatus = fmt.Sprintf("%d/%d in pool", enabled, total)
 	}
 	proxyStatus := "none (direct)"
@@ -205,9 +242,14 @@ func Run() {
 	fmt.Println()
 	warnEnvProxyIgnored()
 
-	if err := server.ListenAndServe(); err != nil {
+	go func() {
+		<-shutdown.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = server.Shutdown(ctx)
+	}()
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		fmt.Fprintf(os.Stderr, "server error: %v\n", err)
-		os.Exit(1)
 	}
 }
 

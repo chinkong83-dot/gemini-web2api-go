@@ -318,6 +318,9 @@ func rotateDo(method, url string, headers map[string]string, body []byte, proxyU
 	if _, err := trustedGoogleURL(url, accountHosts); err != nil {
 		return 0, nil, nil, err
 	}
+	if cfg.BrowserEnabled {
+		return 0, nil, nil, fmt.Errorf("Chrome manages its own session refresh")
+	}
 	var rdr io.Reader
 	if body != nil {
 		rdr = strings.NewReader(string(body))
@@ -369,6 +372,9 @@ func rotateDo(method, url string, headers map[string]string, body []byte, proxyU
 // 失败**不计入健康度**：保活打的是 accounts.google.com，跟对话能不能用是两码事，
 // 网络抖一下就把号标成坏的，会让它在挑号时沉底，反而伤可用性。
 func rotateAllAccounts() time.Duration {
+	if cfg.BrowserEnabled {
+		return defaultRotateInterval
+	}
 	next := defaultRotateInterval
 	for _, a := range accountList() {
 		if a.Status != "enabled" {

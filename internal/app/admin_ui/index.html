@@ -583,6 +583,7 @@ const pages = {
 
   proxies: async () => {
     const data = await api('api/proxies');
+    if (data.browser_mode) return `<div class="panel"><h2>Chrome network</h2><p>Browser mode uses Chrome's network settings. The legacy HTTP proxy pool is inactive.</p></div>`;
     return `
       <div class="panel page-fill">
         <h2>代理池
@@ -635,6 +636,16 @@ const pages = {
   },
 
   cookies: async () => {
+    const browser = await api('api/browser');
+    if (browser.enabled) return `
+      <div class="panel"><h2>Google browser login</h2>
+        <p>${browser.ready ? '<span class="badge ok">Signed in</span>' : '<span class="badge fail">Google SSO required</span>'}</p>
+        <p>Complete login in the dedicated Chrome window. Google Cookies stay in its profile; Cookie import is disabled.</p>
+        <p>Browser: ${browser.visible ? 'visible' : 'hidden'}. ${browser.logging_in ? 'Waiting for sign-in.' : ''}</p>
+        <p>Default: hidden. Restart with <code>GEMINI_SHOW_BROWSER=1</code> to keep it visible; <code>GEMINI_SHOW_BROWSER=0</code> returns to hidden after login.</p>
+        <button class="btn" onclick="startBrowserLogin()">Check / reopen Google login</button>
+        <button class="btn muted" onclick="refreshPage()">Refresh status</button>
+      </div>`;
     const data = await api('api/cookies');
     const items = data.items || [];
     const deadN = items.filter(a => a.health === 'dead').length;
@@ -1372,6 +1383,11 @@ async function doLogout() {
   renderLogin();
 }
 
+async function startBrowserLogin() {
+  await api('api/browser/login', { method: 'POST' });
+  await refreshPage();
+}
+
 // 连通性诊断 ──────────────────────────────────────────────────────────────
 
 async function populateTestProxies() {
@@ -1671,11 +1687,11 @@ const NAV = [
   ['dashboard', '概览'],
   ['requests', '请求记录'],
   ['proxies', '代理池'],
-  ['cookies', 'Cookie 池'],
+  ['cookies', 'Google 登录'],
   ['settings', '设置'],
 ];
 const PAGE_TITLES = {
-  dashboard: '概览', requests: '请求记录', proxies: '代理池', cookies: 'Cookie 池', settings: '设置',
+  dashboard: '概览', requests: '请求记录', proxies: '代理池', cookies: 'Google 登录', settings: '设置',
 };
 
 function toggleSidebar() {

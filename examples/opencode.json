@@ -1,0 +1,24 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "gemini-go-browser/gemini-3.1-pro",
+  "provider": {
+    "gemini-go-browser": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Local Gemini Chrome",
+      "options": {
+        "baseURL": "http://127.0.0.1:8083/v1",
+        "apiKey": "{env:GEMINI_PROXY_API_KEY}"
+      },
+      "models": {
+        "gemini-3.1-pro": {
+          "name": "Gemini 3.1 Pro",
+          "limit": { "context": 16000, "output": 4096 }
+        },
+        "gemini-3.6-flash": {
+          "name": "Gemini 3.6 Flash",
+          "limit": { "context": 16000, "output": 4096 }
+        }
+      }
+    }
+  }
+}

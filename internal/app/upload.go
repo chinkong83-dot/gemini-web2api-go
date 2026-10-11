@@ -113,6 +113,10 @@ func uploadPost(url string, headers map[string]string, body []byte, proxyURL str
 	if _, err := trustedGoogleURL(url, uploadHosts); err != nil {
 		return 0, nil, nil, err
 	}
+	if cfg.BrowserEnabled {
+		res, err := browserRequest("POST", url, headers, body, nil)
+		return res.Status, res.Headers, res.Body, err
+	}
 	if proxyURL != "" {
 		req, err := http.NewRequest("POST", url, bytes.NewReader(body))
 		if err != nil {
